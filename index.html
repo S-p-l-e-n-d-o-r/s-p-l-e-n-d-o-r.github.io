@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📦 图种仓库 · 自动扫描 + 预览</title>
+    <title>📦 图种仓库 · 自动扫描 + 缩略图预览</title>
     <style>
         /* ---------- 全局重置 ---------- */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -126,38 +126,69 @@
             gap: 24px;
         }
         .card {
-            background: #1e293b; border-radius: 20px; padding: 20px 16px 16px;
+            background: #1e293b; border-radius: 20px; padding: 16px 12px 12px;
             border: 1px solid #334155; transition: all 0.25s ease;
-            display: flex; flex-direction: column; align-items: center;
-            text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            display: flex; flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
             cursor: default;
         }
         .card:hover { transform: translateY(-6px); border-color: #4f46e5; box-shadow: 0 16px 40px rgba(79,70,229,0.25); }
-        .card .checkbox-wrap { align-self: flex-start; margin-bottom: 8px; }
+        .card .checkbox-wrap { align-self: flex-start; margin-bottom: 6px; }
         .card input[type="checkbox"] { width: 18px; height: 18px; accent-color: #4f46e5; cursor: pointer; }
-        .card .clickable-preview {
+
+        /* 缩略图容器 */
+        .card .thumbnail {
+            width: 100%;
+            aspect-ratio: 1 / 1; /* 正方形容器 */
+            background: #0f172a;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+            border: 1px solid #334155;
             cursor: pointer;
             transition: 0.2s;
+        }
+        .card .thumbnail:hover { border-color: #a5b4fc; }
+        .card .thumbnail img {
             width: 100%;
+            height: 100%;
+            object-fit: cover; /* 裁剪填充，保持比例 */
+            display: block;
         }
-        .card .clickable-preview:hover .file-icon { transform: scale(1.1); }
-        .file-icon {
-            font-size: 4rem; line-height: 1; margin: 6px 0 4px;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
-            transition: transform 0.2s;
+        .card .thumbnail .fallback-icon {
+            font-size: 3.5rem;
+            color: #64748b;
         }
+
         .card .file-name {
-            font-weight: 600; font-size: 1rem; word-break: break-all;
-            margin: 8px 0 4px; color: #f1f5f9;
+            font-weight: 600;
+            font-size: 0.95rem;
+            word-break: break-all;
+            margin: 4px 0 2px;
+            color: #f1f5f9;
+            cursor: pointer;
             transition: color 0.2s;
         }
-        .card .clickable-preview:hover .file-name { color: #a5b4fc; }
-        .card .file-meta { font-size: 0.75rem; color: #64748b; background: #0f172a; padding: 2px 12px; border-radius: 40px; margin-bottom: 12px; }
+        .card .file-name:hover { color: #a5b4fc; }
+        .card .file-meta {
+            font-size: 0.7rem;
+            color: #64748b;
+            background: #0f172a;
+            padding: 2px 12px;
+            border-radius: 40px;
+            margin-bottom: 8px;
+        }
         .card .dl-single {
             background: #334155; border: none; color: white;
-            padding: 8px 16px; border-radius: 40px; font-weight: 500;
-            font-size: 0.85rem; cursor: pointer; transition: 0.2s;
-            width: 100%; margin-top: auto;
+            padding: 6px 12px; border-radius: 40px; font-weight: 500;
+            font-size: 0.8rem; cursor: pointer; transition: 0.2s;
+            width: 100%;
+            margin-top: auto;
         }
         .card .dl-single:hover { background: #4f46e5; }
 
@@ -243,6 +274,7 @@
             .toolbar button { padding: 8px 14px; font-size: 0.8rem; }
             .help-body { padding: 0 16px 16px; }
             .modal-content { padding: 16px; }
+            .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
         }
     </style>
 </head>
@@ -251,7 +283,7 @@
 
     <!-- 头部 -->
     <div class="header">
-        <h1>🧩 图种仓库 <small>强烈建议使用 7-Zip解压缩</small></h1>
+        <h1>🧩 图种仓库 <small>强烈建议使用 WinRAR 解压缩</small></h1>
         <div class="toolbar">
             <span class="badge">📁 <span id="totalCount">0</span> 个文件</span>
             <button id="selectAllBtn" class="btn-primary">✅ 全选</button>
@@ -287,7 +319,7 @@
             </ul>
             <p><strong>🖼️ 图片预览安全吗？</strong></p>
             <ul>
-                <li>点击卡片上的 <strong>图标或文件名</strong> 可弹出预览窗口。</li>
+                <li>卡片上直接显示缩略图，点击缩略图或文件名可弹出大图预览。</li>
                 <li>预览只读取图片的视觉部分，<span class="highlight">完全不会触碰尾部的压缩包数据</span>，安全无害。</li>
             </ul>
             <p><strong>📂 文件列表自动更新</strong></p>
@@ -384,15 +416,13 @@
             const response = await fetch(fileUrl);
             if (!response.ok) throw new Error(`下载失败 (HTTP ${response.status})`);
             const blob = await response.blob();
-            // 创建 Blob URL
             const blobUrl = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = blobUrl;
-            a.download = fileName; // 强制下载
+            a.download = fileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            // 释放内存
             setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
             statusText.textContent = `✅ 已触发下载：${fileName}`;
         } catch (err) {
@@ -401,13 +431,12 @@
         }
     }
 
-    // ---- 触发下载（单独或批量调用） ----
+    // ---- 触发下载 ----
     async function triggerDownload(fileName, fileUrl) {
         await downloadFile(fileName, fileUrl);
-        // 状态恢复交给调用者
     }
 
-    // ---- 渲染卡片 ----
+    // ---- 渲染卡片（包含缩略图） ----
     function renderCards(files) {
         grid.innerHTML = '';
         if (files.length === 0) {
@@ -417,34 +446,54 @@
         files.forEach((file, index) => {
             const card = document.createElement('div');
             card.className = 'card';
-            const ext = file.name.split('.').pop().toLowerCase();
-            let icon = '📄';
-            if (['jpg','jpeg','png','gif','bmp','webp'].includes(ext)) icon = '🌅';
-            else if (['zip','rar','7z'].includes(ext)) icon = '📦';
-            else if (['txt','md','log'].includes(ext)) icon = '📄';
-            else if (['exe','msi','appimage'].includes(ext)) icon = '⚙️';
-            else if (['mp3','wav','flac'].includes(ext)) icon = '🎵';
-            else if (['mp4','mkv','avi'].includes(ext)) icon = '🎬';
 
-            // 预览链接（用 raw 直接加载图片）
+            // 判断是否为图片
+            const isImg = isImage(file.name);
+            // 预览链接（原始文件）
             const encodedName = encodeURIComponent(file.name);
-            const previewUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/${FOLDER_PATH}/${encodedName}`;
-            const previewData = ` data-preview-name="${file.name}" data-preview-url="${previewUrl}"`;
+            const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/${FOLDER_PATH}/${encodedName}`;
+
+            // 缩略图区域
+            let thumbnailHtml = '';
+            if (isImg) {
+                thumbnailHtml = `
+                    <div class="thumbnail" data-preview-name="${file.name}" data-preview-url="${rawUrl}">
+                        <img src="${rawUrl}" alt="${file.name}" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\\'fallback-icon\\'>🖼️</span>'">
+                    </div>
+                `;
+            } else {
+                // 非图片文件显示文件类型图标
+                let icon = '📄';
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (['zip','rar','7z'].includes(ext)) icon = '📦';
+                else if (['txt','md','log'].includes(ext)) icon = '📄';
+                else if (['exe','msi','appimage'].includes(ext)) icon = '⚙️';
+                else if (['mp3','wav','flac'].includes(ext)) icon = '🎵';
+                else if (['mp4','mkv','avi'].includes(ext)) icon = '🎬';
+                else icon = '📄';
+                thumbnailHtml = `
+                    <div class="thumbnail" data-preview-name="${file.name}" data-preview-url="${rawUrl}" style="cursor:default;">
+                        <span class="fallback-icon" style="font-size:4rem;">${icon}</span>
+                    </div>
+                `;
+            }
+
+            // 文件名（可点击预览）
+            const nameHtml = `<div class="file-name" data-preview-name="${file.name}" data-preview-url="${rawUrl}">${file.name}</div>`;
 
             card.innerHTML = `
                 <div class="checkbox-wrap">
                     <input type="checkbox" class="file-checkbox" data-index="${index}" data-name="${file.name}">
                 </div>
-                <div class="clickable-preview"${previewData}>
-                    <div class="file-icon">${icon}</div>
-                    <div class="file-name" title="${file.name}">${file.name}</div>
-                </div>
+                ${thumbnailHtml}
+                ${nameHtml}
                 <div class="file-meta">${formatSize(file.size)}</div>
                 <button class="dl-single" data-name="${file.name}" data-url="${file.download_url}">⬇ 单独下载</button>
             `;
             grid.appendChild(card);
         });
         totalSpan.textContent = files.length;
+        // 事件绑定使用代理
         grid.addEventListener('click', handleCardClick);
     }
 
@@ -456,31 +505,31 @@
             e.preventDefault();
             const name = target.dataset.name;
             const url = target.dataset.url;
-            // 异步下载，不阻塞 UI
             triggerDownload(name, url).catch(() => {});
             return;
         }
-        // 预览区域
-        const previewEl = target.closest('.clickable-preview');
+
+        // 预览触发：点击缩略图容器或文件名（带有 data-preview-name）
+        const previewEl = target.closest('[data-preview-name]');
         if (previewEl) {
             e.preventDefault();
             const name = previewEl.dataset.previewName;
             const url = previewEl.dataset.previewUrl;
-            openPreview(name, url);
+            // 如果是图片才打开模态框，非图片可忽略或提示
+            if (isImage(name)) {
+                openPreview(name, url);
+            } else {
+                statusText.textContent = `⚠️ "${name}" 不是图片，无法预览。`;
+            }
             return;
         }
     }
 
     // ---- 打开预览模态框 ----
     function openPreview(fileName, fileUrl) {
-        if (!isImage(fileName)) {
-            statusText.textContent = `⚠️ "${fileName}" 不是图片格式，无法预览。`;
-            return;
-        }
         modalImg.src = fileUrl;
         modalImg.alt = fileName;
         modalFileName.textContent = fileName;
-        // 模态框中的下载按钮
         modalDownloadBtn.onclick = function() {
             triggerDownload(fileName, fileUrl).catch(() => {});
             closeModal();
@@ -497,7 +546,6 @@
         modalImg.src = '';
     }
 
-    // ---- 模态框关闭事件 ----
     modalCloseBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', function(e) {
         if (e.target === this) closeModal();
@@ -513,7 +561,7 @@
         return indices.map(i => fileList[i]);
     }
 
-    // ---- 批量下载（逐个 fetch） ----
+    // ---- 批量下载 ----
     async function batchDownload() {
         if (isDownloading) return;
         const selected = getCheckedFiles();
@@ -535,10 +583,8 @@
             try {
                 await downloadFile(file.name, file.download_url);
             } catch (err) {
-                // 单个失败继续
-                statusText.textContent = `⚠️ 第 ${i+1} 个下载失败，继续...`;
+                // 继续
             }
-            // 间隔 300ms 避免浏览器限流
             await new Promise(resolve => setTimeout(resolve, 300));
         }
 
@@ -576,7 +622,7 @@
         }
     });
 
-    // ---- 折叠面板交互 ----
+    // ---- 折叠面板 ----
     const helpToggle = document.getElementById('helpToggle');
     const helpBody = document.getElementById('helpBody');
     const helpIcon = document.getElementById('helpIcon');
@@ -591,7 +637,7 @@
             statusText.textContent = '⏳ 正在从 GitHub 扫描 files/ 目录...';
             fileList = await fetchFileList();
             renderCards(fileList);
-            statusText.textContent = `✅ 扫描完成，共 ${fileList.length} 个文件。点击图标或文件名可预览图片。`;
+            statusText.textContent = `✅ 扫描完成，共 ${fileList.length} 个文件。点击缩略图或文件名可放大预览。`;
         } catch (err) {
             statusText.textContent = `❌ 扫描失败：${err.message}`;
             grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:#f87171;">
