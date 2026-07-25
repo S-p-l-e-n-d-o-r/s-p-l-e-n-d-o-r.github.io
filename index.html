@@ -62,7 +62,7 @@
             min-height: 28px; margin-bottom: 20px;
         }
 
-        /* ---------- 使用说明（折叠）- 图种专用 ---------- */
+        /* ---------- 使用说明（图种专用） ---------- */
         .help-section {
             background: #1e293b;
             border-radius: 16px;
@@ -251,7 +251,7 @@
 
     <!-- 头部 -->
     <div class="header">
-        <h1>🧩 图种仓库 <small>· 自动扫描 + 预览</small></h1>
+        <h1>🧩 图种仓库 <small>强烈建议使用 7-Zip解压缩</small></h1>
         <div class="toolbar">
             <span class="badge">📁 <span id="totalCount">0</span> 个文件</span>
             <button id="selectAllBtn" class="btn-primary">✅ 全选</button>
@@ -264,7 +264,7 @@
     <div id="progressWrap"><div id="progressBar"></div></div>
     <div id="statusText">⏳ 正在从 GitHub 扫描 files/ 目录...</div>
 
-    <!-- ========== 使用说明（已改为图种相关） ========== -->
+    <!-- ========== 使用说明（图种专用） ========== -->
     <div class="help-section" id="helpSection">
         <div class="help-header" id="helpToggle">
             <h3><span>📖</span> 什么是图种？如何使用？</h3>
@@ -281,7 +281,7 @@
             <p><strong>📥 如何正确下载图种？</strong></p>
             <ul>
                 <li><strong>必须使用本页面的下载按钮</strong>（单独下载或批量下载），不要右键另存为。</li>
-                <li>本页面所有下载均使用 <code>download</code> 属性强制保存原始文件，<span class="highlight">浏览器不会渲染图片</span>，图种数据完整保留。</li>
+                <li>本页面所有下载均使用 <code>fetch + Blob</code> 方式，强制保存原始文件，<span class="highlight">浏览器不会渲染图片</span>，图种数据完整保留。</li>
                 <li>下载后，将文件扩展名从 <code>.png</code> 或 <code>.jpg</code> 改为 <code>.zip</code> 或 <code>.rar</code>，即可用压缩软件打开。</li>
                 <li class="danger">⚠️ 请勿使用“右键另存为”或拖拽保存，否则可能丢失隐藏数据。</li>
             </ul>
@@ -325,9 +325,9 @@
     // ============================================================
     //  ✏️ 配置你的 GitHub 仓库信息（公开仓库）
     // ============================================================
-    const REPO_OWNER = 'S-p-l-e-n-d-o-r';           // 你的 GitHub 用户名
-    const REPO_NAME   = 's-p-l-e-n-d-o-r.github.io'; // 你的仓库名
-    const FOLDER_PATH = 'files';                     // 存放图种的文件夹名
+    const REPO_OWNER = 'S-p-l-e-n-d-o-r';
+    const REPO_NAME   = 's-p-l-e-n-d-o-r.github.io';
+    const FOLDER_PATH = 'files';
 
     // ============================================================
     //  核心逻辑
@@ -377,6 +377,36 @@
         return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(ext);
     }
 
+    // ---- 核心下载函数：使用 fetch + Blob 强制下载 ----
+    async function downloadFile(fileName, fileUrl) {
+        try {
+            statusText.textContent = `⏳ 正在获取 ${fileName} ...`;
+            const response = await fetch(fileUrl);
+            if (!response.ok) throw new Error(`下载失败 (HTTP ${response.status})`);
+            const blob = await response.blob();
+            // 创建 Blob URL
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName; // 强制下载
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            // 释放内存
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+            statusText.textContent = `✅ 已触发下载：${fileName}`;
+        } catch (err) {
+            statusText.textContent = `❌ 下载 ${fileName} 失败：${err.message}`;
+            throw err;
+        }
+    }
+
+    // ---- 触发下载（单独或批量调用） ----
+    async function triggerDownload(fileName, fileUrl) {
+        await downloadFile(fileName, fileUrl);
+        // 状态恢复交给调用者
+    }
+
     // ---- 渲染卡片 ----
     function renderCards(files) {
         grid.innerHTML = '';
@@ -396,10 +426,9 @@
             else if (['mp3','wav','flac'].includes(ext)) icon = '🎵';
             else if (['mp4','mkv','avi'].includes(ext)) icon = '🎬';
 
-            // 🔥 关键修复：对文件名进行 URL 编码，解决中文名图片无法显示的问题
+            // 预览链接（用 raw 直接加载图片）
             const encodedName = encodeURIComponent(file.name);
             const previewUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/${FOLDER_PATH}/${encodedName}`;
-            // 预览点击区域（图标+文件名）
             const previewData = ` data-preview-name="${file.name}" data-preview-url="${previewUrl}"`;
 
             card.innerHTML = `
@@ -416,7 +445,6 @@
             grid.appendChild(card);
         });
         totalSpan.textContent = files.length;
-        // 事件代理：处理卡片上的点击（预览和下载）
         grid.addEventListener('click', handleCardClick);
     }
 
@@ -428,10 +456,11 @@
             e.preventDefault();
             const name = target.dataset.name;
             const url = target.dataset.url;
-            triggerDownload(name, url);
+            // 异步下载，不阻塞 UI
+            triggerDownload(name, url).catch(() => {});
             return;
         }
-        // 预览区域（图标或文件名所在的父容器 .clickable-preview）
+        // 预览区域
         const previewEl = target.closest('.clickable-preview');
         if (previewEl) {
             e.preventDefault();
@@ -440,20 +469,6 @@
             openPreview(name, url);
             return;
         }
-    }
-
-    // ---- 触发下载（强制保存） ----
-    function triggerDownload(fileName, fileUrl) {
-        const a = document.createElement('a');
-        a.href = fileUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        statusText.textContent = `⬇️ 正在下载：${fileName}`;
-        setTimeout(() => {
-            if (!isDownloading) statusText.textContent = '💡 就绪，勾选文件即可批量下载';
-        }, 2000);
     }
 
     // ---- 打开预览模态框 ----
@@ -465,13 +480,13 @@
         modalImg.src = fileUrl;
         modalImg.alt = fileName;
         modalFileName.textContent = fileName;
-        // 模态框中的下载按钮，绑定当前文件
+        // 模态框中的下载按钮
         modalDownloadBtn.onclick = function() {
-            triggerDownload(fileName, fileUrl);
+            triggerDownload(fileName, fileUrl).catch(() => {});
             closeModal();
         };
         modal.classList.add('active');
-        document.body.style.overflow = 'hidden'; // 禁止滚动
+        document.body.style.overflow = 'hidden';
         statusText.textContent = `🖼️ 正在预览：${fileName}`;
     }
 
@@ -479,13 +494,13 @@
     function closeModal() {
         modal.classList.remove('active');
         document.body.style.overflow = '';
-        modalImg.src = ''; // 释放资源
+        modalImg.src = '';
     }
 
     // ---- 模态框关闭事件 ----
     modalCloseBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', function(e) {
-        if (e.target === this) closeModal(); // 点击背景关闭
+        if (e.target === this) closeModal();
     });
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
@@ -498,7 +513,7 @@
         return indices.map(i => fileList[i]);
     }
 
-    // ---- 批量下载 ----
+    // ---- 批量下载（逐个 fetch） ----
     async function batchDownload() {
         if (isDownloading) return;
         const selected = getCheckedFiles();
@@ -516,13 +531,19 @@
             const file = selected[i];
             const percent = ((i + 1) / total) * 100;
             progressBar.style.width = `${percent}%`;
-            statusText.textContent = `📥 正在触发第 ${i+1}/${total} 个：${file.name}`;
-            triggerDownload(file.name, file.download_url);
-            await new Promise(resolve => setTimeout(resolve, 500));
+            statusText.textContent = `📥 正在下载第 ${i+1}/${total} 个：${file.name}`;
+            try {
+                await downloadFile(file.name, file.download_url);
+            } catch (err) {
+                // 单个失败继续
+                statusText.textContent = `⚠️ 第 ${i+1} 个下载失败，继续...`;
+            }
+            // 间隔 300ms 避免浏览器限流
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
 
         progressBar.style.width = '100%';
-        statusText.textContent = `✅ 全部 ${total} 个文件下载已触发完毕！`;
+        statusText.textContent = `✅ 批量下载完成！共 ${total} 个文件已触发。`;
         setTimeout(() => {
             progressWrap.classList.remove('active');
             progressBar.style.width = '0%';
