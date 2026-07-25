@@ -62,7 +62,7 @@
             min-height: 28px; margin-bottom: 20px;
         }
 
-        /* ---------- 使用说明（折叠） ---------- */
+        /* ---------- 使用说明（折叠）- 图种专用 ---------- */
         .help-section {
             background: #1e293b;
             border-radius: 16px;
@@ -264,22 +264,36 @@
     <div id="progressWrap"><div id="progressBar"></div></div>
     <div id="statusText">⏳ 正在从 GitHub 扫描 files/ 目录...</div>
 
-    <!-- 使用说明 -->
+    <!-- ========== 使用说明（已改为图种相关） ========== -->
     <div class="help-section" id="helpSection">
         <div class="help-header" id="helpToggle">
-            <h3><span>📖</span> 使用说明 & 图种保护机制</h3>
+            <h3><span>📖</span> 什么是图种？如何使用？</h3>
             <span class="toggle-icon open" id="helpIcon">▼</span>
         </div>
         <div class="help-body" id="helpBody">
-            <p><strong>📌 如何下载文件？</strong></p>
+            <p><strong>🧩 什么是“图种”？</strong></p>
             <ul>
-                <li><strong>单独下载：</strong>每个卡片下方的 <code>⬇ 单独下载</code> 按钮，直接下载原始文件（图种数据完整）。</li>
-                <li><strong>批量下载：</strong>勾选文件，点击顶部 <code>⬇️ 批量下载选中</code>，依次触发下载（间隔0.5秒）。</li>
-                <li>浏览器提示多文件下载时，请点击 <span class="highlight">“允许”</span>。</li>
+                <li><strong>图种</strong>是一种将压缩包（如 <code>.zip</code> 或 <code>.rar</code>）隐藏到图片文件尾部的技巧。</li>
+                <li>图片浏览器只读取文件头部的图像信息，所以它看起来就是一张普通图片。</li>
+                <li>而压缩软件（如 WinRAR、7-Zip）能识别并读取附加在尾部的压缩包数据。</li>
+                <li>简单说：<span class="highlight">一张图片 = 普通图片 + 隐藏的压缩包</span>。</li>
             </ul>
-            <p><strong>🖼️ 图片预览：</strong>点击卡片上的 <strong>图标或文件名</strong>，可弹出预览窗口（仅限图片格式）。预览不会触碰图种附加数据，安全无害。</p>
-            <p><strong>🛡️ 图种安全：</strong>所有下载使用 <code>download</code> 强制保存，浏览器不渲染，保证压缩包数据完好。</p>
-            <p><strong>🔄 自动更新：</strong>页面实时扫描 <code>files/</code> 文件夹，刷新即同步最新文件列表。</p>
+            <p><strong>📥 如何正确下载图种？</strong></p>
+            <ul>
+                <li><strong>必须使用本页面的下载按钮</strong>（单独下载或批量下载），不要右键另存为。</li>
+                <li>本页面所有下载均使用 <code>download</code> 属性强制保存原始文件，<span class="highlight">浏览器不会渲染图片</span>，图种数据完整保留。</li>
+                <li>下载后，将文件扩展名从 <code>.png</code> 或 <code>.jpg</code> 改为 <code>.zip</code> 或 <code>.rar</code>，即可用压缩软件打开。</li>
+                <li class="danger">⚠️ 请勿使用“右键另存为”或拖拽保存，否则可能丢失隐藏数据。</li>
+            </ul>
+            <p><strong>🖼️ 图片预览安全吗？</strong></p>
+            <ul>
+                <li>点击卡片上的 <strong>图标或文件名</strong> 可弹出预览窗口。</li>
+                <li>预览只读取图片的视觉部分，<span class="highlight">完全不会触碰尾部的压缩包数据</span>，安全无害。</li>
+            </ul>
+            <p><strong>📂 文件列表自动更新</strong></p>
+            <ul>
+                <li>本页面会通过 GitHub API 实时扫描 <code>files/</code> 文件夹，新增或删除文件后刷新页面即可同步。</li>
+            </ul>
         </div>
     </div>
 
@@ -311,9 +325,9 @@
     // ============================================================
     //  ✏️ 配置你的 GitHub 仓库信息（公开仓库）
     // ============================================================
-    const REPO_OWNER = 'S-p-l-e-n-d-o-r';   // 例如 'zhangsan'
-    const REPO_NAME   = 's-p-l-e-n-d-o-r.github.io';        // 例如 'zhangsan.github.io'
-    const FOLDER_PATH = 'files';             // 存放图种的文件夹名
+    const REPO_OWNER = 'S-p-l-e-n-d-o-r';           // 你的 GitHub 用户名
+    const REPO_NAME   = 's-p-l-e-n-d-o-r.github.io'; // 你的仓库名
+    const FOLDER_PATH = 'files';                     // 存放图种的文件夹名
 
     // ============================================================
     //  核心逻辑
@@ -382,8 +396,11 @@
             else if (['mp3','wav','flac'].includes(ext)) icon = '🎵';
             else if (['mp4','mkv','avi'].includes(ext)) icon = '🎬';
 
+            // 🔥 关键修复：对文件名进行 URL 编码，解决中文名图片无法显示的问题
+            const encodedName = encodeURIComponent(file.name);
+            const previewUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/${FOLDER_PATH}/${encodedName}`;
             // 预览点击区域（图标+文件名）
-            const previewData = ` data-preview-name="${file.name}" data-preview-url="${file.download_url}"`;
+            const previewData = ` data-preview-name="${file.name}" data-preview-url="${previewUrl}"`;
 
             card.innerHTML = `
                 <div class="checkbox-wrap">
